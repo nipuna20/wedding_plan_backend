@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
             description: String,
             serviceId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Service'
+                // ref: 'Service'
             }
         }
     ],

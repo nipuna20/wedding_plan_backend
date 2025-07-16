@@ -10,14 +10,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/user', require('./routes/userRoutes'));
-app.use('/api/events', require('./routes/eventRoutes'));
-app.use('/api/guests', require('./routes/guestRoutes'));
-app.use('/api/invitations', require('./routes/invitationRoutes'));
-app.use('/api/user', require('./routes/userRoutes'));
+// Import routes
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const eventRoutes = require('./routes/eventRoutes');
+const guestRoutes = require('./routes/guestRoutes');
+const invitationRoutes = require('./routes/invitationRoutes');
+const bookingRoutes = require('./routes/bookingRoutes'); // <-- Add this
 
+// Register routes
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/guests', guestRoutes);
+app.use('/api/invitations', invitationRoutes);
+app.use('/api/bookings', bookingRoutes); // <-- Register booking routes
 
-app.listen(process.env.PORT || 5000, () =>
-    console.log(`🚀 Server running on http://localhost:${process.env.PORT || 5000}`)
+// Remove duplicate: app.use('/api/user', require('./routes/userRoutes'));
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () =>
+    console.log(`🚀 Server running on http://localhost:${PORT}`)
 );

@@ -59,7 +59,8 @@ exports.deleteEvent = async (req, res) => {
 exports.updateEvent = async (req, res) => {
     try {
         const { name, date } = req.body;
-        const eventId = req.params.id.trim(); // Trim just in case
+        const eventId = req.params.eventId.trim();
+ // Trim just in case
 
         console.log("Attempting to update event with ID:", eventId);
         const test = await Event.findById(eventId);
