@@ -1,22 +1,27 @@
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 
-// Create a booking (only customer)
+// Create a booking (customer only)
 exports.createBooking = async (req, res) => {
     try {
         const {
-            customerId, // You might get this from req.user._id if using JWT!
             vendorId,
-            serviceId,  // This is an ObjectId of embedded service in User
-            packageId,  // This is an ObjectId of embedded package in User
+            serviceId,
+            packageId,
             date,
             time,
             address,
             paymentType
         } = req.body;
 
-        // Optionally: Get customerId from JWT token user
-        // const customerId = req.user._id;
+        // Always use JWT user as customerId
+        const customerId = req.user._id;
+
+        // Optionally: check if vendorId exists and is a vendor
+        const vendor = await User.findById(vendorId);
+        if (!vendor || vendor.role !== 'vendor') {
+            return res.status(400).json({ success: false, message: 'Vendor not found' });
+        }
 
         const booking = await Booking.create({
             customerId,
@@ -52,10 +57,10 @@ exports.getMyBookings = async (req, res) => {
     }
 };
 
-// Get all bookings for a given user (by query param)
+// Get all bookings for a user by query
 exports.getUserBookings = async (req, res) => {
     try {
-        const { userId, role } = req.query; // pass as ?userId=...&role=customer
+        const { userId, role } = req.query; // e.g. ?userId=...&role=customer
         let bookings;
         if (role === 'customer') {
             bookings = await Booking.find({ customerId: userId }).populate('vendorId');
@@ -71,7 +76,6 @@ exports.getUserBookings = async (req, res) => {
 };
 
 // Get booking by ID (for customer or vendor)
-// Get booking by ID (safe)
 exports.getBookingById = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.bookingId)
@@ -82,10 +86,12 @@ exports.getBookingById = async (req, res) => {
         }
 
         const isCustomer = req.user.role === 'customer' &&
-            booking.customerId && booking.customerId._id && booking.customerId._id.equals(req.user._id);
+            booking.customerId && booking.customerId._id &&
+            booking.customerId._id.toString() === req.user._id.toString();
 
         const isVendor = req.user.role === 'vendor' &&
-            booking.vendorId && booking.vendorId._id && booking.vendorId._id.equals(req.user._id);
+            booking.vendorId && booking.vendorId._id &&
+            booking.vendorId._id.toString() === req.user._id.toString();
 
         if (isCustomer || isVendor) {
             return res.json({ success: true, booking });
@@ -97,7 +103,6 @@ exports.getBookingById = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }
 };
-
 
 // Update booking payment status
 exports.updateBookingStatus = async (req, res) => {
