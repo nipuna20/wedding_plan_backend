@@ -23,6 +23,21 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Vendor not found' });
     }
 
+    // Validate time slots
+    if (!Array.isArray(time) || time.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one time slot is required' });
+    }
+
+    // Check for time slot conflicts
+    const existingBookings = await Booking.find({
+      vendorId,
+      date: new Date(date),
+      time: { $in: time }
+    });
+    if (existingBookings.length > 0) {
+      return res.status(400).json({ success: false, message: 'One or more time slots are already booked' });
+    }
+
     const booking = await Booking.create({
       customerId,
       vendorId,
@@ -60,7 +75,7 @@ exports.getMyBookings = async (req, res) => {
 // Get all bookings for a user by query
 exports.getUserBookings = async (req, res) => {
   try {
-    const { userId, role } = req.query; // e.g. ?userId=...&role=customer
+    const { userId, role } = req.query;
     let bookings;
     if (role === 'customer') {
       bookings = await Booking.find({ customerId: userId }).populate('vendorId');
@@ -141,6 +156,24 @@ exports.updateBooking = async (req, res) => {
     const newDate = new Date(date);
     if (newDate < today) {
       return res.status(400).json({ success: false, message: 'Date must be in the future' });
+    }
+
+    // Validate time slots if provided
+    if (time && (!Array.isArray(time) || time.length === 0)) {
+      return res.status(400).json({ success: false, message: 'At least one time slot is required' });
+    }
+
+    // Check for time slot conflicts if time is updated
+    if (time) {
+      const existingBookings = await Booking.find({
+        vendorId: booking.vendorId,
+        date: date || booking.date,
+        time: { $in: time },
+        _id: { $ne: booking._id } // Exclude the current booking
+      });
+      if (existingBookings.length > 0) {
+        return res.status(400).json({ success: false, message: 'One or more time slots are already booked' });
+      }
     }
 
     // Update only provided fields
