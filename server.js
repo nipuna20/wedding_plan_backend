@@ -17,6 +17,7 @@ const eventRoutes = require('./routes/eventRoutes');
 const guestRoutes = require('./routes/guestRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
 const bookingRoutes = require('./routes/bookingRoutes'); // <-- Add this
+const reviewRoutes = require('./routes/reviewRoutes')
 
 // Register routes
 app.use('/api/auth', authRoutes);
@@ -24,7 +25,8 @@ app.use('/api/user', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/guests', guestRoutes);
 app.use('/api/invitations', invitationRoutes);
-app.use('/api/bookings', bookingRoutes); // <-- Register booking routes
+app.use('/api/bookings', bookingRoutes); 
+app.use('/api/reviews',reviewRoutes);
 
 // Remove duplicate: app.use('/api/user', require('./routes/userRoutes'));
 
