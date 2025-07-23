@@ -109,6 +109,11 @@ const addServiceDetails = async (req, res) => {
             return res.status(403).json({ message: 'Only vendors can add services' });
         }
 
+        // Check if the vendor already has a service
+        if (user.serviceDetails.length > 0) {
+            return res.status(400).json({ message: 'You can only add one service as a vendor' });
+        }
+
         const newService = {
             serviceName,
             serviceType,
