@@ -109,11 +109,6 @@ const addServiceDetails = async (req, res) => {
             return res.status(403).json({ message: 'Only vendors can add services' });
         }
 
-        // Check if the vendor already has a service
-        if (user.serviceDetails.length > 0) {
-            return res.status(400).json({ message: 'You can only add one service as a vendor' });
-        }
-
         const newService = {
             serviceName,
             serviceType,
@@ -348,23 +343,32 @@ const getAllPackages = async (req, res) => {
             return res.status(403).json({ message: 'Unauthorized' });
         }
 
+        let packages = [];
+
         if (user.role === 'vendor') {
             // Vendors get their own packages
-            return res.status(200).json({ packages: user.packages });
+            packages = user.packages.map(pkg => ({
+                ...pkg.toObject(),
+                vendorId: user._id.toString(),
+                vendorName: user.businessName || user.name,
+                serviceType: user.serviceDetails.find(s => s._id.toString() === pkg.serviceId?.toString())?.serviceType || 'Unknown'
+            }));
         } else if (user.role === 'customer') {
             // Customers get all packages from all vendors
-            const vendors = await User.find({ role: 'vendor' }).select('packages businessName name');
-            const allPackages = vendors.flatMap(vendor => 
+            const vendors = await User.find({ role: 'vendor' }).select('packages businessName name serviceDetails');
+            packages = vendors.flatMap(vendor => 
                 vendor.packages.map(pkg => ({
                     ...pkg.toObject(),
                     vendorId: vendor._id.toString(),
-                    vendorName: vendor.businessName || vendor.name
+                    vendorName: vendor.businessName || vendor.name,
+                    serviceType: vendor.serviceDetails.find(s => s._id.toString() === pkg.serviceId?.toString())?.serviceType || 'Unknown'
                 }))
             );
-            return res.status(200).json({ packages: allPackages });
         } else {
             return res.status(403).json({ message: 'Unauthorized' });
         }
+
+        return res.status(200).json({ packages });
     } catch (error) {
         console.error('Get packages error:', error);
         res.status(500).json({ message: 'Server error' });
