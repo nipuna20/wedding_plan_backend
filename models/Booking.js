@@ -12,4 +12,7 @@ const bookingSchema = new mongoose.Schema({
     paymentStatus: { type: String, enum: ['pending', 'completed'], default: 'pending' }
 }, { timestamps: true });
 
+// Index for efficient time slot conflict checks
+bookingSchema.index({ vendorId: 1, date: 1, time: 1 });
+
 module.exports = mongoose.model('Booking', bookingSchema);

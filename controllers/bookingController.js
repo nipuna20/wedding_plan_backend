@@ -20,7 +20,14 @@ exports.createBooking = async (req, res) => {
     // Check if vendorId exists and is a vendor
     const vendor = await User.findById(vendorId);
     if (!vendor || vendor.role !== 'vendor') {
-      return res.status(400).json({ success: false, message: 'Vendor not found' });
+      return res.status(400).json({ success: false, message: 'Vendor not found or not a valid vendor' });
+    }
+
+    // Validate date is in the future
+    const today = new Date();
+    const bookingDate = new Date(date);
+    if (bookingDate < today) {
+      return res.status(400).json({ success: false, message: 'Booking date must be in the future' });
     }
 
     // Validate time slots
@@ -28,14 +35,17 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one time slot is required' });
     }
 
-    // Check for time slot conflicts
+    // Check for time slot conflicts for this specific vendor
     const existingBookings = await Booking.find({
       vendorId,
       date: new Date(date),
       time: { $in: time }
     });
     if (existingBookings.length > 0) {
-      return res.status(400).json({ success: false, message: 'One or more time slots are already booked' });
+      return res.status(400).json({
+        success: false,
+        message: `One or more time slots are already booked for vendor ${vendorId} on ${date}`
+      });
     }
 
     const booking = await Booking.create({
@@ -49,8 +59,10 @@ exports.createBooking = async (req, res) => {
       paymentType
     });
 
+    console.log(`Booking created: Customer ${customerId} booked vendor ${vendorId} for ${date} at ${time}`);
     res.status(201).json({ success: true, booking });
   } catch (err) {
+    console.error('Error creating booking:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -68,6 +80,7 @@ exports.getMyBookings = async (req, res) => {
     }
     res.json({ success: true, bookings });
   } catch (err) {
+    console.error('Error fetching bookings:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -86,6 +99,7 @@ exports.getUserBookings = async (req, res) => {
     }
     res.json({ success: true, bookings });
   } catch (err) {
+    console.error('Error fetching user bookings:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -114,6 +128,7 @@ exports.getBookingById = async (req, res) => {
 
     return res.status(403).json({ message: 'Not authorized to view this booking' });
   } catch (err) {
+    console.error('Error fetching booking by ID:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -130,8 +145,10 @@ exports.updateBookingStatus = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
+    console.log(`Booking status updated: Booking ID ${req.params.bookingId} to status ${status}`);
     res.json({ success: true, booking });
   } catch (err) {
+    console.error('Error updating booking status:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -153,7 +170,7 @@ exports.updateBooking = async (req, res) => {
 
     // Validate date is in the future
     const today = new Date();
-    const newDate = new Date(date);
+    const newDate = new Date(date || booking.date);
     if (newDate < today) {
       return res.status(400).json({ success: false, message: 'Date must be in the future' });
     }
@@ -172,7 +189,10 @@ exports.updateBooking = async (req, res) => {
         _id: { $ne: booking._id } // Exclude the current booking
       });
       if (existingBookings.length > 0) {
-        return res.status(400).json({ success: false, message: 'One or more time slots are already booked' });
+        return res.status(400).json({
+          success: false,
+          message: `One or more time slots are already booked for vendor ${booking.vendorId} on ${date || booking.date}`
+        });
       }
     }
 
@@ -189,8 +209,10 @@ exports.updateBooking = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    console.log(`Booking updated: Booking ID ${req.params.bookingId} for vendor ${booking.vendorId}`);
     res.json({ success: true, booking: updatedBooking });
   } catch (err) {
+    console.error('Error updating booking:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -209,8 +231,10 @@ exports.deleteBooking = async (req, res) => {
     }
 
     await Booking.findByIdAndDelete(req.params.bookingId);
+    console.log(`Booking deleted: Booking ID ${req.params.bookingId}`);
     res.json({ success: true, message: 'Booking deleted' });
   } catch (err) {
+    console.error('Error deleting booking:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
