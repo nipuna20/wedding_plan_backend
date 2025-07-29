@@ -1,7 +1,7 @@
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 
-// Create a booking (customer only)
+// Create a booking (customer or vendor for availability)
 exports.createBooking = async (req, res) => {
   try {
     const {
@@ -11,7 +11,8 @@ exports.createBooking = async (req, res) => {
       date,
       time,
       address,
-      paymentType
+      paymentType,
+      bookingType = 'booking' // Default to 'booking'
     } = req.body;
 
     // Always use JWT user as customerId
@@ -21,6 +22,11 @@ exports.createBooking = async (req, res) => {
     const vendor = await User.findById(vendorId);
     if (!vendor || vendor.role !== 'vendor') {
       return res.status(400).json({ success: false, message: 'Vendor not found or not a valid vendor' });
+    }
+
+    // For availability bookings, ensure the user is the vendor
+    if (bookingType === 'availability' && customerId.toString() !== vendorId.toString()) {
+      return res.status(403).json({ success: false, message: 'Only vendors can set their own availability' });
     }
 
     // Validate date is in the future
@@ -35,17 +41,34 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one time slot is required' });
     }
 
-    // Check for time slot conflicts for this specific vendor
-    const existingBookings = await Booking.find({
+    // Check for time slot conflicts with customer bookings
+    const existingCustomerBookings = await Booking.find({
       vendorId,
       date: new Date(date),
-      time: { $in: time }
+      time: { $in: time },
+      bookingType: 'booking'
     });
-    if (existingBookings.length > 0) {
+    if (existingCustomerBookings.length > 0) {
       return res.status(400).json({
         success: false,
-        message: `One or more time slots are already booked for vendor ${vendorId} on ${date}`
+        message: `One or more time slots are already booked by customers for vendor ${vendorId} on ${date}`
       });
+    }
+
+    // For availability bookings, check for existing availability to prevent duplicates
+    if (bookingType === 'availability') {
+      const existingAvailability = await Booking.find({
+        vendorId,
+        date: new Date(date),
+        time: { $in: time },
+        bookingType: 'availability'
+      });
+      if (existingAvailability.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `One or more time slots are already marked as available for vendor ${vendorId} on ${date}`
+        });
+      }
     }
 
     const booking = await Booking.create({
@@ -56,10 +79,11 @@ exports.createBooking = async (req, res) => {
       date,
       time,
       address,
-      paymentType
+      paymentType,
+      bookingType
     });
 
-    console.log(`Booking created: Customer ${customerId} booked vendor ${vendorId} for ${date} at ${time}`);
+    console.log(`${bookingType === 'availability' ? 'Availability' : 'Booking'} created: Customer ${customerId} for vendor ${vendorId} on ${date} at ${time}`);
     res.status(201).json({ success: true, booking });
   } catch (err) {
     console.error('Error creating booking:', err);
@@ -72,9 +96,9 @@ exports.getMyBookings = async (req, res) => {
   try {
     let bookings;
     if (req.user.role === 'customer') {
-      bookings = await Booking.find({ customerId: req.user._id }).populate('vendorId');
+      bookings = await Booking.find({ customerId: req.user._id, bookingType: 'booking' }).populate('vendorId');
     } else if (req.user.role === 'vendor') {
-      bookings = await Booking.find({ vendorId: req.user._id }).populate('customerId');
+      bookings = await Booking.find({ vendorId: req.user._id, bookingType: 'booking' }).populate('customerId');
     } else {
       return res.status(403).json({ message: 'Only vendors or customers can view bookings' });
     }
@@ -85,15 +109,15 @@ exports.getMyBookings = async (req, res) => {
   }
 };
 
-// Get all bookings for a user by query
+// Get all bookings and availability for a user by query
 exports.getUserBookings = async (req, res) => {
   try {
     const { userId, role } = req.query;
     let bookings;
     if (role === 'customer') {
-      bookings = await Booking.find({ customerId: userId }).populate('vendorId');
+      bookings = await Booking.find({ customerId: userId, bookingType: 'booking' }).populate('vendorId');
     } else if (role === 'vendor') {
-      bookings = await Booking.find({ vendorId: userId }).populate('customerId');
+      bookings = await Booking.find({ vendorId: userId }).populate('customerId'); // Include both bookings and availability
     } else {
       return res.status(400).json({ success: false, message: 'Role required (customer or vendor)' });
     }
@@ -163,9 +187,14 @@ exports.updateBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check if the user is the customer who created the booking
-    if (req.user.role === 'customer' && booking.customerId.toString() !== req.user._id.toString()) {
+    // Check authorization based on booking type
+    if (booking.bookingType === 'booking' && req.user.role === 'customer' && 
+        booking.customerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to update this booking' });
+    }
+    if (booking.bookingType === 'availability' && req.user.role === 'vendor' && 
+        booking.vendorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this availability' });
     }
 
     // Validate date is in the future
@@ -181,17 +210,34 @@ exports.updateBooking = async (req, res) => {
     }
 
     // Check for time slot conflicts if time is updated
-    if (time) {
+    if (time && booking.bookingType === 'booking') {
       const existingBookings = await Booking.find({
         vendorId: booking.vendorId,
         date: date || booking.date,
         time: { $in: time },
+        bookingType: 'booking',
         _id: { $ne: booking._id } // Exclude the current booking
       });
       if (existingBookings.length > 0) {
         return res.status(400).json({
           success: false,
           message: `One or more time slots are already booked for vendor ${booking.vendorId} on ${date || booking.date}`
+        });
+      }
+    }
+
+    // For availability updates, check for conflicts with customer bookings
+    if (time && booking.bookingType === 'availability') {
+      const existingCustomerBookings = await Booking.find({
+        vendorId: booking.vendorId,
+        date: date || booking.date,
+        time: { $in: time },
+        bookingType: 'booking'
+      });
+      if (existingCustomerBookings.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `One or more time slots are already booked by customers for vendor ${booking.vendorId} on ${date || booking.date}`
         });
       }
     }
@@ -209,7 +255,7 @@ exports.updateBooking = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    console.log(`Booking updated: Booking ID ${req.params.bookingId} for vendor ${booking.vendorId}`);
+    console.log(`${booking.bookingType === 'availability' ? 'Availability' : 'Booking'} updated: ID ${req.params.bookingId} for vendor ${booking.vendorId}`);
     res.json({ success: true, booking: updatedBooking });
   } catch (err) {
     console.error('Error updating booking:', err);
@@ -225,14 +271,19 @@ exports.deleteBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Check if the user is the customer who created the booking
-    if (req.user.role === 'customer' && booking.customerId.toString() !== req.user._id.toString()) {
+    // Check authorization based on booking type
+    if (booking.bookingType === 'booking' && req.user.role === 'customer' && 
+        booking.customerId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to delete this booking' });
+    }
+    if (booking.bookingType === 'availability' && req.user.role === 'vendor' && 
+        booking.vendorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this availability' });
     }
 
     await Booking.findByIdAndDelete(req.params.bookingId);
-    console.log(`Booking deleted: Booking ID ${req.params.bookingId}`);
-    res.json({ success: true, message: 'Booking deleted' });
+    console.log(`${booking.bookingType === 'availability' ? 'Availability' : 'Booking'} deleted: ID ${req.params.bookingId}`);
+    res.json({ success: true, message: `${booking.bookingType === 'availability' ? 'Availability' : 'Booking'} deleted` });
   } catch (err) {
     console.error('Error deleting booking:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
