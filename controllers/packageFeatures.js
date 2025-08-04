@@ -3,6 +3,7 @@ const packageFeatures = {
         canContact: false,
         googleMap: false,
         reviewAndRating: false,
+        allowReviews: false,       // <-- NEW: Reviews not allowed on BASIC
         chatWithCustomer: false,
         faq: false,
         analytics: false,
@@ -14,6 +15,7 @@ const packageFeatures = {
         canContact: true,
         googleMap: true,
         reviewAndRating: true,
+        allowReviews: true,        // <-- NEW: Reviews allowed on STANDARD
         chatWithCustomer: true,
         faq: true,
         analytics: true,
@@ -25,6 +27,7 @@ const packageFeatures = {
         canContact: true,
         googleMap: true,
         reviewAndRating: true,
+        allowReviews: true,        // <-- NEW: Reviews allowed on PREMIUM
         chatWithCustomer: true,
         faq: true,
         analytics: true,
@@ -35,7 +38,5 @@ const packageFeatures = {
         freeAd: true
     }
 };
-
-
 
 module.exports = packageFeatures;
