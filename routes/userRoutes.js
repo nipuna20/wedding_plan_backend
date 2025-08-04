@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
+const checkVendorFeature = require('../middleware/packageAccess');
 
 const {
     updateUserProfile,
     getUserEvents,
-    updateVendorSetup, 
+    updateVendorSetup,
     updateVendorAvailability,
     addServiceDetails,
     getAllUserServices,
@@ -23,8 +24,18 @@ const {
     deletePackage,
     updatePackage,
     addPackagesToService,
-    deleteTask 
+    deleteTask,
+    selectVendorPackage // <-- make sure this is included
 } = require('../controllers/userController');
+
+// --- Placeholder handlers for features not implemented yet ---
+const uploadHandler = (req, res) => {
+    res.status(501).json({ message: 'Gallery upload not implemented yet.' });
+};
+
+const chatHandler = (req, res) => {
+    res.status(501).json({ message: 'Chat feature not implemented yet.' });
+};
 
 // Get user profile
 router.get('/profile', protect, (req, res) => {
@@ -69,6 +80,14 @@ router.post('/task/:taskIndex/subtask', protect, authorize('customer'), addSubta
 router.get('/task/:taskIndex/subtasks', protect, authorize('customer'), getSubtasks);
 
 router.delete('/task/:taskIndex/subtask/:subtaskIndex', protect, authorize('customer'), deleteSubtask);
+
+router.put('/vendor/select-package', protect, authorize('vendor'), selectVendorPackage);
+
+// Example: Protect gallery upload route (placeholder handler)
+router.post('/vendor/gallery/upload', protect, authorize('vendor'), checkVendorFeature('galleryUpload'), uploadHandler);
+
+// Example: Protect chat (placeholder handler)
+router.post('/vendor/chat', protect, authorize('vendor'), checkVendorFeature('chatWithCustomer'), chatHandler);
 
 // NEW TASK DELETE ROUTE
 router.delete('/task/:taskIndex', protect, authorize('customer'), deleteTask);

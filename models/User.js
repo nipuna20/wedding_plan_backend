@@ -72,6 +72,13 @@ const userSchema = new mongoose.Schema({
         }
     ],
 
+    vendorPackage: {
+        type: String,
+        enum: ['BASIC', 'STANDARD', 'PREMIUM'],
+        default: 'BASIC'
+    },
+    vendorPackageExpiry: { type: Date },
+
     resetPasswordToken: String,
     resetPasswordExpire: Date
 }, { timestamps: true });
