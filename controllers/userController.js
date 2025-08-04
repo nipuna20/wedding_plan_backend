@@ -5,9 +5,11 @@ const mongoose = require('mongoose');
 const getUserProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id).select('-password');
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+        if (user.role === 'vendor') {
+            const pkg = user.vendorPackage || 'BASIC';
+            user.phone = pkg === 'BASIC' ? null : user.phone;
         }
+
         res.status(200).json({ user });
     } catch (error) {
         console.error('Get profile error:', error);
@@ -157,13 +159,16 @@ const getAllUserServices = async (req, res) => {
         const services = [];
         
         if (req.user.role === 'vendor') {
-            const user = await User.findById(req.user._id).select('serviceDetails businessName name phone');
+            // Add vendorPackage to select!
+            const user = await User.findById(req.user._id).select('serviceDetails businessName name phone vendorPackage');
             if (user && user.serviceDetails) {
                 let vendorServices = user.serviceDetails;
                 if (serviceType) {
                     vendorServices = vendorServices.filter(s => s.serviceType.toLowerCase() === serviceType.toLowerCase());
                 }
                 vendorServices.forEach(service => {
+                    // Use user's own package
+                    const pkg = user.vendorPackage || 'BASIC';
                     services.push({
                         _id: service._id.toString(),
                         serviceName: service.serviceName,
@@ -176,13 +181,14 @@ const getAllUserServices = async (req, res) => {
                         basePrice: service.basePrice || 0.0,
                         vendorId: user._id.toString(),
                         vendorName: user.businessName || user.name,
-                        phone: user.phone || 'Not available',
+                        phone: pkg === 'BASIC' ? null : user.phone  // <--- Hide if BASIC
                     });
                 });
             }
         } else {
+            // Fetch vendorPackage for each vendor!
             const vendors = await User.find({ role: 'vendor' })
-                .select('serviceDetails businessName name phone');
+                .select('serviceDetails businessName name phone vendorPackage');
             vendors.forEach(vendor => {
                 if (vendor.serviceDetails && vendor.serviceDetails.length > 0) {
                     let vendorServices = vendor.serviceDetails;
@@ -190,6 +196,7 @@ const getAllUserServices = async (req, res) => {
                         vendorServices = vendorServices.filter(s => s.serviceType.toLowerCase() === serviceType.toLowerCase());
                     }
                     vendorServices.forEach(service => {
+                        const pkg = vendor.vendorPackage || 'BASIC';
                         services.push({
                             _id: service._id.toString(),
                             serviceName: service.serviceName,
@@ -202,7 +209,7 @@ const getAllUserServices = async (req, res) => {
                             basePrice: service.basePrice || 0.0,
                             vendorId: vendor._id.toString(),
                             vendorName: vendor.businessName || vendor.name,
-                            phone: vendor.phone || 'Not available',
+                            phone: pkg === 'BASIC' ? null : vendor.phone // <--- Hide if BASIC
                         });
                     });
                 }
@@ -215,6 +222,7 @@ const getAllUserServices = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 
 const deleteService = async (req, res) => {
     try {
