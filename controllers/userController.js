@@ -665,6 +665,27 @@ const deleteTask = async (req, res) => {
     }
 };
 
+const selectVendorPackage = async (req, res) => {
+    try {
+        const { vendorPackage } = req.body;
+        if (!['BASIC', 'STANDARD', 'PREMIUM'].includes(vendorPackage)) {
+            return res.status(400).json({ message: 'Invalid package' });
+        }
+        // Only vendors can change package
+        if (req.user.role !== 'vendor') {
+            return res.status(403).json({ message: 'Only vendors can change their package' });
+        }
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { vendorPackage },
+            { new: true }
+        ).select('-password');
+        res.status(200).json({ message: 'Vendor package updated', user });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     deleteService,
     updateServiceDetails,
@@ -686,5 +707,6 @@ module.exports = {
     getSubtasks, 
     deleteSubtask,
     addPackagesToService,
-    deleteTask
+    deleteTask,
+    selectVendorPackage
 };
