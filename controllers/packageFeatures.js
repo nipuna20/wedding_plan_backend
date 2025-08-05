@@ -9,7 +9,8 @@ const packageFeatures = {
         analytics: false,
         orderPayment: false,
         galleryUpload: false,
-        socialLinks: false
+        socialLinks: false,
+        chatWithCustomer: false,
     },
     STANDARD: {
         canContact: true,
@@ -21,7 +22,8 @@ const packageFeatures = {
         analytics: true,
         orderPayment: 'long_settlement',
         galleryUpload: true,
-        socialLinks: true
+        socialLinks: true,
+        chatWithCustomer: true,
     },
     PREMIUM: {
         canContact: true,
@@ -35,7 +37,8 @@ const packageFeatures = {
         galleryUpload: true,
         socialLinks: true,
         support24x7: true,
-        freeAd: true
+        freeAd: true,
+        chatWithCustomer: true,
     }
 };
 
