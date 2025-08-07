@@ -1,5 +1,6 @@
 const Booking = require('../models/Booking');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 // Create a booking (customer or vendor for availability)
 exports.createBooking = async (req, res) => {
@@ -41,12 +42,13 @@ exports.createBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one time slot is required' });
     }
 
-    // Check for time slot conflicts with customer bookings
+    // Check for time slot conflicts with confirmed customer bookings
     const existingCustomerBookings = await Booking.find({
       vendorId,
       date: new Date(date),
       time: { $in: time },
-      bookingType: 'booking'
+      bookingType: 'booking',
+      status: 'confirmed' // Only check confirmed bookings
     });
     if (existingCustomerBookings.length > 0) {
       return res.status(400).json({
@@ -80,13 +82,112 @@ exports.createBooking = async (req, res) => {
       time,
       address,
       paymentType,
-      bookingType
+      bookingType,
+      status: bookingType === 'booking' ? 'pending' : 'confirmed' // Set status based on booking type
     });
+
+    // Send notification to vendor for customer bookings
+    if (bookingType === 'booking') {
+      const notification = await Notification.create({
+        userId: vendorId,
+        message: `New booking request from customer ${customerId} for ${date} at ${time.join(', ')}`,
+        bookingId: booking._id, // Include bookingId for action
+        createdAt: new Date()
+      });
+      console.log(`Notification created for vendor ${vendorId}: ${JSON.stringify(notification)}`);
+    }
 
     console.log(`${bookingType === 'availability' ? 'Availability' : 'Booking'} created: Customer ${customerId} for vendor ${vendorId} on ${date} at ${time}`);
     res.status(201).json({ success: true, booking });
   } catch (err) {
     console.error('Error creating booking:', err);
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// Confirm a booking (vendor only)
+exports.confirmBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Ensure only the vendor can confirm the booking
+    if (req.user.role !== 'vendor' || booking.vendorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to confirm this booking' });
+    }
+
+    // Check if booking is already confirmed or rejected
+    if (booking.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `Booking is already ${booking.status}` });
+    }
+
+    // Update booking status to confirmed
+    booking.status = 'confirmed';
+    await booking.save();
+
+    // Send notification to customer
+    const customerNotification = await Notification.create({
+      userId: booking.customerId,
+      message: `Your booking for ${booking.date.toISOString().split('T')[0]} at ${booking.time.join(', ')} has been confirmed by the vendor.`,
+      bookingId: booking._id,
+      createdAt: new Date()
+    });
+    console.log(`Customer notification created: ${JSON.stringify(customerNotification)}`);
+
+    // Send confirmation notification to vendor
+    const vendorNotification = await Notification.create({
+      userId: booking.vendorId,
+      message: `You have confirmed the booking for ${booking.date.toISOString().split('T')[0]} at ${booking.time.join(', ')}.`,
+      bookingId: booking._id,
+      createdAt: new Date()
+    });
+    console.log(`Vendor notification created: ${JSON.stringify(vendorNotification)}`);
+
+    console.log(`Booking confirmed: ID ${req.params.bookingId} for vendor ${booking.vendorId}`);
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error('Error confirming booking:', err);
+    res.status(500).json({ success: false, message: 'Server error', error: err.message });
+  }
+};
+
+// Reject a booking (vendor only)
+exports.rejectBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Ensure only the vendor can reject the booking
+    if (req.user.role !== 'vendor' || booking.vendorId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to reject this booking' });
+    }
+
+    // Check if booking is already confirmed or rejected
+    if (booking.status !== 'pending') {
+      return res.status(400).json({ success: false, message: `Booking is already ${booking.status}` });
+    }
+
+    // Update booking status to rejected
+    booking.status = 'rejected';
+    await booking.save();
+
+    // Send notification to customer
+    const notification = await Notification.create({
+      userId: booking.customerId,
+      message: `Your booking for ${booking.date.toISOString().split('T')[0]} at ${booking.time.join(', ')} was not accepted by the vendor. Please find another vendor.`,
+      bookingId: booking._id,
+      createdAt: new Date()
+    });
+    console.log(`Customer notification created: ${JSON.stringify(notification)}`);
+
+    console.log(`Booking rejected: ID ${req.params.bookingId} for vendor ${booking.vendorId}`);
+    res.json({ success: true, message: 'Booking rejected' });
+  } catch (err) {
+    console.error('Error rejecting booking:', err);
     res.status(500).json({ success: false, message: 'Server error', error: err.message });
   }
 };
@@ -169,7 +270,7 @@ exports.updateBookingStatus = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
-    console.log(`Booking status updated: Booking ID ${req.params.bookingId} to status ${status}`);
+    console.log(`Booking payment status updated: Booking ID ${req.params.bookingId} to status ${status}`);
     res.json({ success: true, booking });
   } catch (err) {
     console.error('Error updating booking status:', err);
@@ -216,6 +317,7 @@ exports.updateBooking = async (req, res) => {
         date: date || booking.date,
         time: { $in: time },
         bookingType: 'booking',
+        status: 'confirmed', // Only check confirmed bookings
         _id: { $ne: booking._id } // Exclude the current booking
       });
       if (existingBookings.length > 0) {
@@ -226,13 +328,14 @@ exports.updateBooking = async (req, res) => {
       }
     }
 
-    // For availability updates, check for conflicts with customer bookings
+    // For availability updates, check for conflicts with confirmed customer bookings
     if (time && booking.bookingType === 'availability') {
       const existingCustomerBookings = await Booking.find({
         vendorId: booking.vendorId,
         date: date || booking.date,
         time: { $in: time },
-        bookingType: 'booking'
+        bookingType: 'booking',
+        status: 'confirmed' // Only check confirmed bookings
       });
       if (existingCustomerBookings.length > 0) {
         return res.status(400).json({

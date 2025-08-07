@@ -16,9 +16,10 @@ const userRoutes = require('./routes/userRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const guestRoutes = require('./routes/guestRoutes');
 const invitationRoutes = require('./routes/invitationRoutes');
-const bookingRoutes = require('./routes/bookingRoutes'); // <-- Add this
-const reviewRoutes = require('./routes/reviewRoutes')
+const bookingRoutes = require('./routes/bookingRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const notificationRoutes = require('./routes/notificationRoutes'); // Add this line
 
 // Register routes
 app.use('/api/auth', authRoutes);
@@ -26,11 +27,10 @@ app.use('/api/user', userRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/guests', guestRoutes);
 app.use('/api/invitations', invitationRoutes);
-app.use('/api/bookings', bookingRoutes); 
-app.use('/api/reviews',reviewRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/reviews', reviewRoutes);
 app.use('/api/chat', chatRoutes);
-
-// Remove duplicate: app.use('/api/user', require('./routes/userRoutes'));
+app.use('/api/notifications', notificationRoutes); // Add this line
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>

@@ -10,10 +10,11 @@ const bookingSchema = new mongoose.Schema({
     address: { type: String, required: true },
     paymentType: { type: String, enum: ['credit_card', 'cash', 'advance', 'full'], default: 'cash' },
     paymentStatus: { type: String, enum: ['pending', 'completed'], default: 'pending' },
-    bookingType: { type: String, enum: ['booking', 'availability'], default: 'booking' } // New field
+    bookingType: { type: String, enum: ['booking', 'availability'], default: 'booking' },
+    status: { type: String, enum: ['pending', 'confirmed', 'rejected'], default: 'pending' } // Added 'rejected'
 }, { timestamps: true });
 
 // Index for efficient time slot conflict checks
-bookingSchema.index({ vendorId: 1, date: 1, time: 1, bookingType: 1 });
+bookingSchema.index({ vendorId: 1, date: 1, time: 1, bookingType: 1, status: 1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);
