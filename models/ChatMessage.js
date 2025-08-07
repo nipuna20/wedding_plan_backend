@@ -6,7 +6,7 @@ const chatMessageSchema = new Schema({
     receiverId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     message: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
-    // Optionally, add a conversationId for group/threaded chat in future
+    readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }], // Array to track users who have read the message
 }, { timestamps: true });
 
 module.exports = mongoose.model('ChatMessage', chatMessageSchema);

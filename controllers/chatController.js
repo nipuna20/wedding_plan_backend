@@ -28,12 +28,13 @@ async function sendMessage(req, res) {
             return res.status(403).json({ message: 'Chat is only allowed between vendors and customers.' });
         }
 
-        // Save the message
+        // Save the message with empty readBy array
         const chatMessage = new ChatMessage({
             senderId,
             receiverId,
             message,
             timestamp: new Date(),
+            readBy: [], // Initialize with empty readBy array
         });
 
         await chatMessage.save();
@@ -53,6 +54,18 @@ async function getConversation(req, res) {
         if (!otherUserId) {
             return res.status(400).json({ message: 'otherUserId is required.' });
         }
+
+        // Mark message as read by adding userId to readBy array
+        await ChatMessage.updateMany(
+            {
+                $or: [
+                    { senderId: userId, receiverId: otherUserId },
+                    { senderId: otherUserId, receiverId: userId }
+                ],
+                readBy: { $ne: userId } // Only update if userId is not already in readBy
+            },
+            { $addToSet: { readBy: userId } } // Add userId to readBy array
+        );
 
         const messages = await ChatMessage.find({
             $or: [
@@ -83,7 +96,7 @@ async function getChatUsers(req, res) {
             .populate('receiverId', 'name profileImage role')
             .sort({ timestamp: -1 });
 
-        // Create a map to store the latest message for each user
+        // Create a map to store the latest message and unread count for each user
         const userMap = new Map();
         messages.forEach((msg) => {
             const otherUserId = msg.senderId._id.toString() === userId.toString()
@@ -101,13 +114,24 @@ async function getChatUsers(req, res) {
                     role: otherUser.role,
                     lastMessage: msg.message,
                     lastMessageTime: msg.timestamp.toISOString(),
+                    unreadCount: 0, // Initialize unread count
                 });
+            }
+
+            // Increment unread count for messages sent to the user that they haven't read
+            if (msg.receiverId._id.toString() === userId.toString() && 
+                !msg.readBy.map(id => id.toString()).includes(userId.toString())) {
+                const userData = userMap.get(otherUserId.toString());
+                userData.unreadCount += 1;
+                userMap.set(otherUserId.toString(), userData);
             }
         });
 
         // Convert map to array
         const users = Array.from(userMap.values());
-        res.json({ users });
+        // Calculate total unread messages for the current user
+        const totalUnread = users.reduce((sum, user) => sum + user.unreadCount, 0);
+        res.json({ users, totalUnread });
     } catch (err) {
         res.status(500).json({ message: 'Error fetching chat users', error: err.message });
     }
