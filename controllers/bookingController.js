@@ -1,3 +1,5 @@
+// bookingController.js (modified)
+
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -73,6 +75,22 @@ exports.createBooking = async (req, res) => {
       }
     }
 
+    // New: Check if vendor has already reached max bookings (2) for the day (for customer bookings only)
+    if (bookingType === 'booking') {
+      const confirmedCount = await Booking.countDocuments({
+        vendorId,
+        date: new Date(date),
+        bookingType: 'booking',
+        status: 'confirmed'
+      });
+      if (confirmedCount >= 2) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vendor has reached the maximum number of bookings (2) for this day'
+        });
+      }
+    }
+
     const booking = await Booking.create({
       customerId,
       vendorId,
@@ -121,6 +139,20 @@ exports.confirmBooking = async (req, res) => {
     // Check if booking is already confirmed or rejected
     if (booking.status !== 'pending') {
       return res.status(400).json({ success: false, message: `Booking is already ${booking.status}` });
+    }
+
+    // New: Check if confirming this would exceed max bookings (2) for the day
+    const confirmedCount = await Booking.countDocuments({
+      vendorId: booking.vendorId,
+      date: booking.date,
+      bookingType: 'booking',
+      status: 'confirmed'
+    });
+    if (confirmedCount >= 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot confirm: Vendor has reached the maximum number of bookings (2) for this day'
+      });
     }
 
     // Update booking status to confirmed
